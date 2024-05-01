@@ -12,13 +12,15 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 
 class Ui_Dialog(object):
-    def setupUi(self, Dialog):
+    def setupUi(self, Dialog, data):
         Dialog.setObjectName("Dialog")
         Dialog.resize(1080, 720)
         Dialog.setMinimumSize(QtCore.QSize(1080, 720))
         Dialog.setStyleSheet("background-color: rgb(232, 248, 255);")
+
         self.gridLayout_2 = QtWidgets.QGridLayout(Dialog)
         self.gridLayout_2.setObjectName("gridLayout_2")
+
         self.acceptButton = QtWidgets.QPushButton(Dialog)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
@@ -29,29 +31,40 @@ class Ui_Dialog(object):
         self.acceptButton.setStyleSheet("background-color: rgb(175, 226, 255);")
         self.acceptButton.setObjectName("acceptButton")
         self.gridLayout_2.addWidget(self.acceptButton, 1, 1, 1, 1)
+
         spacerItem = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         self.gridLayout_2.addItem(spacerItem, 1, 0, 1, 1)
+
         self.tableWidget = QtWidgets.QTableWidget(Dialog)
         self.tableWidget.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
         self.tableWidget.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.tableWidget.setObjectName("tableWidget")
         self.tableWidget.setColumnCount(3)
-        self.tableWidget.setRowCount(1)
-        item = QtWidgets.QTableWidgetItem()
-        self.tableWidget.setVerticalHeaderItem(0, item)
+
         item = QtWidgets.QTableWidgetItem()
         self.tableWidget.setHorizontalHeaderItem(0, item)
         item = QtWidgets.QTableWidgetItem()
         self.tableWidget.setHorizontalHeaderItem(1, item)
         item = QtWidgets.QTableWidgetItem()
         self.tableWidget.setHorizontalHeaderItem(2, item)
-        item = QtWidgets.QTableWidgetItem()
-        self.tableWidget.setItem(0, 0, item)
-        item = QtWidgets.QTableWidgetItem()
-        self.tableWidget.setItem(0, 1, item)
-        item = QtWidgets.QTableWidgetItem()
-        self.tableWidget.setItem(0, 2, item)
+
+        self.tableWidget.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+        self.tableWidget.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
         self.gridLayout_2.addWidget(self.tableWidget, 0, 0, 1, 2)
+
+        self.acceptButton.clicked.connect(Dialog.accept)
+
+        rows_amount = len(data)
+        self.tableWidget.setRowCount(rows_amount)
+        for i in range(len(data)):
+            item = QtWidgets.QTableWidgetItem()
+            item.setText(str(i + 1))
+            self.tableWidget.setVerticalHeaderItem(i, item)
+            for j in range(len(data[i])):
+                item = QtWidgets.QTableWidgetItem()
+                item.setTextAlignment(QtCore.Qt.AlignCenter)
+                item.setText(str(data[i][j]))
+                self.tableWidget.setItem(i, j, item)
 
         self.retranslateUi(Dialog)
         QtCore.QMetaObject.connectSlotsByName(Dialog)
@@ -60,23 +73,12 @@ class Ui_Dialog(object):
         _translate = QtCore.QCoreApplication.translate
         Dialog.setWindowTitle(_translate("Dialog", "Description of individuals"))
         self.acceptButton.setText(_translate("Dialog", "Ok"))
-        item = self.tableWidget.verticalHeaderItem(0)
-        item.setText(_translate("Dialog", "1"))
         item = self.tableWidget.horizontalHeaderItem(0)
         item.setText(_translate("Dialog", "Individual"))
         item = self.tableWidget.horizontalHeaderItem(1)
         item.setText(_translate("Dialog", "Property"))
         item = self.tableWidget.horizontalHeaderItem(2)
         item.setText(_translate("Dialog", "Value"))
-        __sortingEnabled = self.tableWidget.isSortingEnabled()
-        self.tableWidget.setSortingEnabled(False)
-        item = self.tableWidget.item(0, 0)
-        item.setText(_translate("Dialog", "Хуйня"))
-        item = self.tableWidget.item(0, 1)
-        item.setText(_translate("Dialog", "Хуйня"))
-        item = self.tableWidget.item(0, 2)
-        item.setText(_translate("Dialog", "Хуйня"))
-        self.tableWidget.setSortingEnabled(__sortingEnabled)
 
 
 if __name__ == "__main__":
@@ -84,6 +86,6 @@ if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
     Dialog = QtWidgets.QDialog()
     ui = Ui_Dialog()
-    ui.setupUi(Dialog)
+    ui.setupUi(Dialog, [["Manal {}".format(i), "Takuyou {}".format(i), "Musicu {}".format(i)] for i in range(10)])
     Dialog.show()
     sys.exit(app.exec_())

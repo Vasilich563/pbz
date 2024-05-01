@@ -11,7 +11,8 @@ import re
 
 import db_agent
 from db_agent import write_file
-import server
+from typing import Any, List, Dict, Set
+import parse
 
 object_property_template = {
     "type": "rdf:type",
@@ -57,7 +58,7 @@ def append_item(table: QtWidgets.QTableWidget, column, value):
     table.setVerticalHeaderItem(row_count, item)
 
     item = QtWidgets.QTableWidgetItem()
-    item.setTextAlignment(QtCore.Qt.AlignCenter)
+    item.setTextAlignment(QtCore.Qt.AlignLeft)
     item.setText(str(value))
     table.setItem(row_count, column, item)
 
@@ -71,9 +72,25 @@ def append_items_row(table: QtWidgets.QTableWidget, values_row):
 
     for i in range(len(values_row)):
         item = QtWidgets.QTableWidgetItem()
-        item.setTextAlignment(QtCore.Qt.AlignCenter)
+        item.setTextAlignment(QtCore.Qt.AlignLeft)
         item.setText(str(values_row[i]))
         table.setItem(row_count, i, item)
+
+
+def rewrite_table(table: QtWidgets.QTableWidget, list_of_value_rows):
+    for i in range(table.rowCount()):
+        table.removeRow(0)
+    rows_amount = len(list_of_value_rows)
+    table.setRowCount(rows_amount)
+    for i in range(len(list_of_value_rows)):
+        item = QtWidgets.QTableWidgetItem()
+        item.setText(str(i + 1))
+        table.setVerticalHeaderItem(i, item)
+        for j in range(len(list_of_value_rows[i])):
+            item = QtWidgets.QTableWidgetItem()
+            item.setTextAlignment(QtCore.Qt.AlignLeft)
+            item.setText(str(list_of_value_rows[i][j]))
+            table.setItem(i, j, item)
 
 
 class Ui_MainWindow(object):
@@ -372,6 +389,7 @@ class Ui_MainWindow(object):
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
+        self.last_name = None
         self.connect_all()
 
         self.tabWidget.setCurrentIndex(0)
@@ -487,44 +505,273 @@ class Ui_MainWindow(object):
         elif self.tabWidget.currentIndex() == 5:
             self.prepare_query_tab()
 
-    # def refresh_tables(self):
-    #     for i in range(self.tabWidget.count()):
-    #         if i == 5:
-    #             continue
-    #         data = self.update_data(i.tab)
-    #         if not data:
-    #             data = ''
-    #         sheet = Sheet(
-    #             i.tab,
-    #             data=data,
-    #             height=700,
-    #             width=1020,
-    #             default_column_width=300
-    #         )
-    #         sheet.enable_bindings()
-    #         sheet.extra_bindings("begin_edit_cell", self.begin_edit_cell)
-    #         if i == 2:
-    #             span = sheet.span(key=self.just_tabs[i.tab], header=True)
-    #             sheet.readonly(span)
-    #         sheet.edit_validation(self.validate_edits)
-    #         sheet.grid(row=0, column=1, sticky="nswe")
-    #         sheet.headers(i.tab_name)
-    #         self.update_tab_sheet(i.tab, sheet)
+    def update_data_class(self):
+        content = []
+        query_result = db_agent.execute_get_query(relation="rdf:type", object="owl:Class")
+        for item in query_result:
+            content.append(item["subject"].split("/")[-1][:-1])
+
+        return content
+
+    def update_subclasses(self):
+        content = []
+
+        query_result = db_agent.execute_get_query(relation="rdfs:subClassOf")
+
+        for item in query_result:
+            content.append([item["object"].split("/")[-1][:-1],
+                            item["subject"].split("/")[-1][:-1]])
+
+        return content
+
+    def update_data_individual(self):
+        content = []
+        query_result = db_agent.execute_get_individuals_query()
+        for item in query_result:
+            content.append(item["subject"].split("/")[-1][:-1])
+
+        return content
+
+    def handle_data_in_dict_output(self, data: List[Dict[Any, Any]]):
+        content = []
+        for i in data:
+            content.append([i.get('subject'),
+                            i.get('relation'),
+                            i.get('object')])
+
+        return content
+
+    def update_data_object_property(self):
+        content = []
+
+        query_result = db_agent.execute_get_query(
+            relation="rdf:type", object="owl:ObjectProperty"
+        )
+        for item in query_result:
+            dict_item = {}
+            for i in db_agent.execute_get_query():
+                if i["subject"].split("/")[-1][:-1] == item["subject"].split("/")[-1][:-1]:
+                    if i["relation"].split("#")[1][:-1] == 'type':
+                        dict_item['subject'] = item["subject"].split("/")[-1][:-1]
+                    elif i["relation"].split("#")[1][:-1] == 'domain':
+                        dict_item['relation'] = i["object"].split("/")[-1][:-1]
+                    else:
+                        dict_item['object'] = i["object"].split("/")[-1][:-1]
+            content.append(dict_item.copy())
+            dict_item.clear()
+
+        return self.handle_data_in_dict_output(content)
+
+    def update_data_property(self):
+        content = []
+
+        query_result = db_agent.execute_get_query(
+            relation="rdf:type", object="owl:DatatypeProperty"
+        )
+        for item in query_result:
+            dict_item = {}
+            for i in db_agent.execute_get_query():
+                if i["subject"].split("/")[-1][:-1] == item["subject"].split("/")[-1][:-1]:
+                    if i["relation"].split("#")[1][:-1] == 'type':
+                        dict_item['subject'] = item["subject"].split("/")[-1][:-1]
+                    elif i["relation"].split("#")[1][:-1] == 'domain':
+                        dict_item['relation'] = i["object"].split("/")[-1][:-1]
+                    else:
+                        dict_item['object'] = 'xsd:' + i["object"].split("#")[1][:-1]
+            content.append(dict_item.copy())
+            dict_item.clear()
+
+        return self.handle_data_in_dict_output(content)
+
+    def update_data(self, index):
+        if index == 0:
+            return [[i] for i in self.update_data_class()]
+        elif index == 1:
+            return self.update_subclasses()
+        elif index == 2:
+            return [[i] for i in self.update_data_individual()]
+        elif index == 3:
+            return self.update_data_object_property()
+        elif index == 4:
+            return self.update_data_property()
+
+    def refresh_tables(self):
+        for i in range(self.tabWidget.count()):
+            if i == 5:
+                continue
+            data = self.update_data(i)
+            if not data:
+                data = []
+            if i == 0:
+                rewrite_table(self.classTable, data)
+            elif i == 1:
+                rewrite_table(self.subclassTable, data)
+            elif i == 2:
+                rewrite_table(self.individualTable, data)
+            elif i == 3:
+                rewrite_table(self.objectPropertyTable, data)
+            elif i == 4:
+                rewrite_table(self.dataPropertyTable, data)
+
 
     def load_ontology_clicked(self):
         filename, ok = QtWidgets.QFileDialog.getOpenFileName(
             MainWindow,
             "импортировать файл",
-            "/home/yackub",
+            "/home/vodohleb",
             "Text files (*.owl *.rdf)",
         )
         if filename:
             write_file(filename)
             self.refresh_tables()
 
+    def save_last_name(self):
+        if self.tabWidget.currentIndex() == 0:
+            self.last_name = {
+                "last_name": self.classTable.currentItem().text(),
+                "row": self.classTable.currentItem().row(),
+                "column": self.classTable.currentItem().column(),
+                "tab_index": self.tabWidget.currentIndex()
+            }
+        elif self.tabWidget.currentIndex() == 2:
+            self.last_name = {
+                "last_name": self.individualTable.currentItem().text(),
+                "row": self.individualTable.currentItem().row(),
+                "column": self.individualTable.currentItem().column(),
+                "tab_index": self.tabWidget.currentIndex()
+            }
+        elif self.tabWidget.currentIndex() == 3:
+            self.last_name = {
+                "last_name": self.objectPropertyTable.currentItem().text(),
+                "row": self.objectPropertyTable.currentItem().row(),
+                "column": self.objectPropertyTable.currentItem().column(),
+                "tab_index": self.tabWidget.currentIndex()
+            }
+        elif self.tabWidget.currentIndex() == 4:
+            self.last_name = {
+                "last_name": self.dataPropertyTable.currentItem().text(),
+                "row": self.dataPropertyTable.currentItem().row(),
+                "column": self.dataPropertyTable.currentItem().column(),
+                "tab_index": self.tabWidget.currentIndex()
+            }
+
+    def connect_save_last_name(self):
+        self.classTable.itemDoubleClicked.connect(self.save_last_name)
+        self.individualTable.itemDoubleClicked.connect(self.save_last_name)
+        self.objectPropertyTable.itemDoubleClicked.connect(self.save_last_name)
+        self.dataPropertyTable.itemDoubleClicked.connect(self.save_last_name)
+
+    def rename(self):
+        if self.last_name is not None:
+            if self.last_name["tab_index"] == 0:
+                db_agent.rename_subject_object(
+                    old_name=self.last_name["last_name"],
+                    new_name=self.classTable.item(self.last_name["row"], self.last_name["column"]).text()
+                )
+            elif self.last_name["tab_index"] == 2:
+                db_agent.rename_subject_object(
+                    old_name=self.last_name["last_name"],
+                    new_name=self.individualTable.item(self.last_name["row"], self.last_name["column"]).text()
+                )
+            elif self.last_name["tab_index"] == 3:
+                if self.last_name["column"] == 0:
+                    db_agent.rename_relation(
+                        old_name=self.last_name["last_name"],
+                        new_name=self.objectPropertyTable.item(self.last_name["row"], self.last_name["column"]).text()
+                    )
+                else:
+                    self.objectPropertyTable.item(
+                        self.last_name["row"], self.last_name["column"]
+                    ).setText(self.last_name["last_name"])
+            elif self.last_name["tab_index"] == 4:
+                if self.last_name["column"] == 0:
+                    db_agent.rename_relation(
+                        old_name=self.last_name["last_name"],
+                        new_name=self.dataPropertyTable.item(self.last_name["row"], self.last_name["column"]).text()
+                    )
+                else:
+                    self.dataPropertyTable.item(
+                        self.last_name["row"], self.last_name["column"]
+                    ).setText(self.last_name["last_name"])
+            self.last_name = None
+            self.refresh_tables()
+
+    def rename_connection(self):
+        self.tabWidget.currentChanged.connect(self.rename)
+        self.classTable.itemSelectionChanged.connect(self.rename)
+        self.individualTable.itemSelectionChanged.connect(self.rename)
+        self.objectPropertyTable.itemSelectionChanged.connect(self.rename)
+        self.dataPropertyTable.itemSelectionChanged.connect(self.rename)
+
+
     def connect_all(self):
         self.tabWidget.currentChanged.connect(self.tab_changed)
         self.loadOntologyButton.clicked.connect(self.load_ontology_clicked)
+        self.connect_save_last_name()
+        self.rename_connection()
+
+    def get_individual_info(self, individual: str):
+        content = []
+        validation = parse.validate_input({
+            'NamedIndividual': individual,
+        })
+        if not validation['NamedIndividual']:
+            return content
+
+        query_result = db_agent.execute_get_individuals_query(name=individual)
+        for item in query_result:
+            subject = item["subject"].split("/")[-1][:-1]
+            item_dict = {
+                'subject': subject,
+            }
+            relation = item["relation"].split("/")[-1][:-1]
+            if len(item["object"].split("^^")) == 2:
+                try:
+                    object = float(item["object"].split("^^")[0][1:-1])
+                except Exception:
+                    object = item["object"].split("^^")[0]
+                item_dict.update({
+                    'relation': relation,
+                    'object': object
+                })
+            else:
+                object = item["object"].split("/")[-1][:-1]
+                item_dict.update({
+                    'relation': relation,
+                    'object': object
+                })
+            content.append(item_dict)
+
+        individual_class = None
+        for i in db_agent.execute_get_query():
+            try:
+                if i["subject"].split("/")[-1][:-1] == individual and \
+                   not i["object"].split("/")[-1][:-1].startswith('owl') and \
+                   i["relation"].split("#")[1][:-1] == 'type':
+                    individual_class = i["object"].split("/")[-1][:-1]
+                    break
+            except IndexError:
+                pass
+        content.append({
+            'subject': individual,
+            'relation': 'type',
+            'object': individual_class
+        })
+
+        return self.handle_data_in_dict_output(content)
+
+    def find_individual(self, individuals_name: List[str]):
+        data = []
+        for i in individuals_name:
+            data.extend(self.get_individual_info(i))
+
+
+
+    def describe(self):
+        selected_cells = self.individualTable.selectedItems()
+        data: List[str] = [item.text() for item in selected_cells]  # type: ignore
+        self.find_individual(data)
+
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
