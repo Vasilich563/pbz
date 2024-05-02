@@ -13,7 +13,8 @@ import db_agent
 from db_agent import write_file
 from typing import Any, List, Dict, Set
 import parse
-from description import Ui_Dialog
+from description import UiDescribeDialog
+from create_dialog import UiCreateDialog, CustomDialog, Connection
 
 object_property_template = {
     "type": "rdf:type",
@@ -506,6 +507,13 @@ class Ui_MainWindow(object):
         elif self.tabWidget.currentIndex() == 5:
             self.prepare_query_tab()
 
+    def show_warning_box(self, message):
+        warning_box = QtWidgets.QMessageBox(parent=MainWindow)
+        warning_box.setIcon(QtWidgets.QMessageBox.Icon.Warning)
+        warning_box.setTitle("Warning!")
+        warning_box.setText(message)
+        warning_box.show()
+
     def update_data_class(self):
         content = []
         query_result = db_agent.execute_get_query(relation="rdf:type", object="owl:Class")
@@ -614,7 +622,6 @@ class Ui_MainWindow(object):
             elif i == 4:
                 rewrite_table(self.dataPropertyTable, data)
 
-
     def load_ontology_clicked(self):
         filename, ok = QtWidgets.QFileDialog.getOpenFileName(
             MainWindow,
@@ -624,6 +631,130 @@ class Ui_MainWindow(object):
         )
         if filename:
             write_file(filename)
+            self.refresh_tables()
+
+    def create(self, data: Dict[str, str]):
+        try:
+            if self.tabWidget.currentIndex() == 0:
+                self.create_class(data)
+            elif self.tabWidget.currentIndex() == 1:
+                return self.create_subclass(data)
+            elif self.tabWidget.currentIndex() == 2:
+                self.create_individual(data)
+            elif self.tabWidget.currentIndex() == 3:
+                self.create_object_property(data)
+            elif self.tabWidget.currentIndex() == 4:
+                self.create_data_property(data)
+        except Exception:
+            self.show_warning_box("Check input args, maybe some of them are empty.")
+
+    def create_form_window(self):
+        connection = None
+        if self.tabWidget.currentIndex() == 0:
+            connection = Connection.CREATE_CLASS
+        elif self.tabWidget.currentIndex() == 1:
+            connection = Connection.CREATE_SUBCLASS
+        elif self.tabWidget.currentIndex() == 2:
+            connection = Connection.CREATE_INDIVIDUAL
+        elif self.tabWidget.currentIndex() == 3:
+            connection = Connection.CREATE_OBJECT_PROPERTY
+        elif self.tabWidget.currentIndex() == 4:
+            connection = Connection.CREATE_DATA_PROPERTY
+
+        Dialog = CustomDialog(parent=MainWindow)
+        ui = UiCreateDialog()
+        ui.setupUi(Dialog, connection)
+        Dialog.formDoneSignal.connect(self.create)
+        Dialog.show()
+
+    def create_class(self, data: Dict[str, str]):
+        validation = parse.validate_input({
+            'Class': data['classname'],
+        })
+        if validation['Class']:
+            return
+        db_agent.execute_post_query(f"<{data['classname']}>", "rdf:type", "owl:Class")
+        self.refresh_tables()
+
+    def create_subclass(self, data: Dict[str, str]):
+        parent_class = parse.check_class_existing(data['parent'])
+        child_class = parse.check_class_existing(data['classname'])
+        if not parent_class:
+            self.show_warning_box("Each parent class doesn't exist.")
+            return
+        if not child_class:
+            db_agent.execute_post_query(f"<{data['classname']}>", "rdf:type", "owl:Class")
+        else:
+            self.delete_class(data['classname'])
+            db_agent.execute_post_query(f"<{data['classname']}>", "rdf:type", "owl:Class")
+        if db_agent.execute_post_query(f"<{data['classname']}>", "rdfs:subClassOf", f"<{data['parent']}>"):
+            self.refresh_tables()
+
+    def create_individual(self, data: Dict[str, str]):
+        validation = parse.validate_input({
+            'NamedIndividual': data['instance_name'],
+            'Class': data['instance_type']
+        })
+        if validation['NamedIndividual'] or not validation['Class']:
+            self.show_warning_box("Check input args.")
+            return
+        if db_agent.execute_post_query(
+            f"<{data['instance_name']}>", "rdf:type", "owl:NamedIndividual"
+        ):
+            db_agent.execute_post_query(
+                f"<{data['instance_name']}>", "rdf:type", f"<{data['instance_type']}>"
+            )
+            self.refresh_tables()
+
+    def create_object_property(self, data: Dict[str, str]):
+        validation = parse.validate_input({
+            'ObjectProperty': data['object_property'],
+        })
+        if validation['ObjectProperty']:
+            self.show_warning_box("Check input args.")
+            return
+        if not parse.check_class_existing(data['domain_1']) or not parse.check_class_existing(data['domain_2']):
+            self.show_warning_box("Such class doesn't exist.")
+            return
+        if (
+            db_agent.execute_post_query(
+                f"<{data['object_property']}>", "rdf:type", "owl:ObjectProperty"
+            )
+            and db_agent.execute_post_query(
+                f"<{data['object_property']}>", "rdfs:domain", f"<{data['domain_1']}>"
+            )
+            and db_agent.execute_post_query(
+                f"<{data['object_property']}>", "rdfs:range", f"<{data['domain_2']}>"
+            )
+        ):
+            self.refresh_tables()
+
+    def create_data_property(self, data: Dict[str, str]):
+        allows_range = ["xsd:decimal", "xsd:int", "xsd:string"]
+        if data['xs_range'] not in allows_range:
+            self.show_warning_box("Check input args.")
+            return
+        validation = parse.validate_input({
+            'DatatypeProperty': data['data_property'],
+            'Class': data['domain']
+        })
+        if not validation['Class']:
+            self.show_warning_box("Check input args.")
+            return
+        if validation['DatatypeProperty']:
+            self.show_warning_box("Check input args.")
+            return
+        if (
+            db_agent.execute_post_query(
+                f"<{data['data_property']}>", "rdf:type", "owl:DatatypeProperty"
+            )
+            and db_agent.execute_post_query(
+                f"<{data['data_property']}>", "rdfs:domain", f"<{data['domain']}>"
+            )
+            and db_agent.execute_post_query(
+                f"<{data['data_property']}>", "rdfs:range", f"{data['xs_range']}"
+            )
+        ):
             self.refresh_tables()
 
     def save_last_name(self):
@@ -710,6 +841,8 @@ class Ui_MainWindow(object):
         self.connect_save_last_name()
         self.rename_connection()
         self.describeButton.clicked.connect(self.describe)
+        self.createButton.clicked.connect(self.create_form_window)
+        self.deleteButton.clicked.connect(self.delete)
 
     def get_individual_info(self, individual: str):
         content = []
@@ -766,7 +899,7 @@ class Ui_MainWindow(object):
         for i in individuals_name:
             data.extend(self.get_individual_info(i))
         Dialog = QtWidgets.QDialog(parent=MainWindow)
-        ui = Ui_Dialog()
+        ui = UiDescribeDialog()
         ui.setupUi(Dialog, data)
         Dialog.show()
 
@@ -774,6 +907,151 @@ class Ui_MainWindow(object):
         selected_cells = self.individualTable.selectedItems()
         data: List[str] = [item.text() for item in selected_cells]  # type: ignore
         self.find_individual(data)
+
+    def delete(self):
+        if self.tabWidget.currentIndex() == 0:
+            data: List[str] = [i.text() for i in self.classTable.selectedItems()]
+            for i in data:
+                self.delete_class(i)
+        elif self.tabWidget.currentIndex() == 2:
+            data: List[str] = [i.text() for i in self.individualTable.selectedItems()]
+            for i in data:
+                self.delete_instance(i)
+        elif self.tabWidget.currentIndex() == 3:
+            data = []
+            for i in self.objectPropertyTable.selectedItems():
+                if i.column() == 0:
+                    data.append(i.text())
+            for i in data:
+                self.delete_object_property(i)
+        elif self.tabWidget.currentIndex() == 4:
+            data = []
+            for i in self.dataPropertyTable.selectedItems():
+                if i.column() == 0:
+                    data.append(i.text())
+            for i in data:
+                self.delete_data_property(i)
+    """
+    def delete_individual_property_form(self, tab: ttk.Frame):
+        self.delete_form_window = Tk()
+        self.delete_form_window.title("Delete Property Form")
+        entries = []
+        self.delete_form_window.geometry("500x300")
+        label = ttk.Label(self.delete_form_window, text="Property Name")
+        label.place(relx=0.5, rely=0.1, anchor=CENTER)
+        entry = ttk.Entry(self.delete_form_window)
+        entry.place(relx=0.5, rely=0.25, anchor=CENTER)
+        entries.append(entry)
+
+        label = ttk.Label(self.delete_form_window, text="Individual Name")
+        label.place(relx=0.5, rely=0.4, anchor=CENTER)
+        entry = ttk.Entry(self.delete_form_window)
+        entry.place(relx=0.5, rely=0.55, anchor=CENTER)
+        entries.append(entry)
+
+        self.submit_button = ttk.Button(self.delete_form_window, text="Submit",
+                                        command=lambda: self.delete_individual_property(tab, entries))
+        self.submit_button.place(relx=0.5, rely=0.8, anchor=CENTER)
+
+    def delete_individual_property(self, tab: ttk.Frame, entries: List[ttk.Entry]):
+        if tab == self.data_property_tab:
+            self.instance_delete_data_property(entries[0].get(), entries[1].get())
+        else:
+            self.instance_delete_object_property(entries[0].get(), entries[1].get())
+        self.delete_form_window.destroy()
+
+    def instance_delete_data_property(self, data_property: str, individual_name: str, hide=False):
+        all_info = get_full_info(individual_name, "owl:NamedIndividual")
+        if not all_info:
+            messagebox.showwarning("Warning", "Such individual doesn't exist.")
+            return
+        validation = validate_input({
+            'DatatypeProperty': data_property,
+        })
+        if not validation['DatatypeProperty']:
+            messagebox.showwarning("Warning", "Check input args.")
+            return
+        for i in all_info:
+            if i["relation"].split("/")[-1][:-1] == data_property:
+                db_agent.execute_delete_query(
+                    f'<{i["subject"].split("/")[-1][:-1]}>',
+                    f'<{i["relation"].split("/")[-1][:-1]}>',
+                    f'"{i["object"].split("^^")[0][1:-1]}"^^{data_property_template[i["object"].split("#")[-1][:-1]]}',
+                )
+        if not hide:
+            self.refresh_tables(self.tabs)
+
+    def instance_delete_object_property(self, object_property: str, individual_name: str, hide=False):
+        all_info = get_full_info(individual_name, "owl:NamedIndividual")
+        if not all_info:
+            messagebox.showwarning("Warning", "Such individual doesn't exist.")
+            return
+        validation = validate_input({
+            'ObjectProperty': object_property,
+        })
+        if not validation['ObjectProperty']:
+            messagebox.showwarning("Warning", "Check input args.")
+            return
+        for i in all_info:
+            if i["relation"].split("/")[-1][:-1] == object_property:
+                db_agent.execute_delete_query(
+                    f'<{i["subject"].split("/")[-1][:-1]}>',
+                    f'<{i["relation"].split("/")[-1][:-1]}>',
+                    f'<{i["object"].split("/")[-1][:-1]}>',
+                )
+        if not hide:
+            self.refresh_tables(self.tabs)
+    """
+    def delete_class(self, subject_class: str):
+        all_info = parse.get_full_info(subject_class, "owl:Class")
+        if not all_info:
+            self.show_warning_box("Such class doesn't exist.")
+            return
+        connected_object: Set[str] = set()
+        for i in db_agent.execute_get_query():
+            if i["object"].split("/")[-1][:-1] == subject_class:
+                connected_object.add(i["subject"].split("/")[-1][:-1])
+        for i in connected_object:
+            self.delete_instance(i, hide=True)
+            self.delete_data_property(i, hide=True)
+            self.delete_object_property(i, hide=True)
+        db_agent.delete_class_or_individual(subject_class)
+
+        self.refresh_tables()
+
+    def delete_instance(self, instance_name: str, hide=False):
+        all_info = parse.get_full_info(instance_name, "owl:NamedIndividual")
+        if not all_info:
+            if not hide:
+                self.show_warning_box("Such instance doesn't exist.")
+            return
+        db_agent.delete_class_or_individual(instance_name)
+        if not hide:
+            self.refresh_tables()
+
+    def delete_object_property(self, object_property: str, hide=False):
+        all_info = parse.get_full_info(object_property, "owl:ObjectProperty")
+        if not all_info:
+            if not hide:
+                self.show_warning_box("Such property doesn't exist.")
+            return
+        db_agent.delete_property(object_property)
+        if not hide:
+            self.refresh_tables()
+
+    def delete_data_property(self, data_property: str, hide=False):
+        all_info = parse.get_full_info(data_property, "owl:DatatypeProperty")
+        if not all_info:
+            if not hide:
+                self.show_warning_box("Such property doesn't exist.")
+            return
+        db_agent.delete_property(data_property)
+        if not hide:
+            self.refresh_tables()
+
+    def delete_all(self):  # TODO Курва, зброю на землю!!!!
+        db_agent.delete_all()
+        self.refresh_tables()
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate

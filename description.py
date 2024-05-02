@@ -11,7 +11,7 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 
-class Ui_Dialog(object):
+class UiDescribeDialog(object):
     def setupUi(self, Dialog, data):
         Dialog.setObjectName("Dialog")
         Dialog.resize(1080, 720)
@@ -85,7 +85,7 @@ if __name__ == "__main__":
     import sys
     app = QtWidgets.QApplication(sys.argv)
     Dialog = QtWidgets.QDialog()
-    ui = Ui_Dialog()
+    ui = UiDescribeDialog()
     ui.setupUi(Dialog, [["Manal {}".format(i), "Takuyou {}".format(i), "Musicu {}".format(i)] for i in range(10)])
     Dialog.show()
     sys.exit(app.exec_())

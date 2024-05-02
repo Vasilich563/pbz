@@ -102,7 +102,7 @@ class CustomDialog(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-class Ui_Dialog(object):
+class UiCreateDialog(object):
     def setupUi(self, Dialog: CustomDialog, connection: Connection):
         self.connection = connection
 
@@ -271,7 +271,7 @@ if __name__ == "__main__":
     import sys
     app = QtWidgets.QApplication(sys.argv)
     Dialog = CustomDialog()
-    ui = Ui_Dialog()
+    ui = UiCreateDialog()
     ui.setupUi(Dialog, Connection.PROVIDE_DATA_PROPERTY)
     Dialog.show()
     sys.exit(app.exec_())
