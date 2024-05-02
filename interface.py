@@ -13,6 +13,7 @@ import db_agent
 from db_agent import write_file
 from typing import Any, List, Dict, Set
 import parse
+from description import Ui_Dialog
 
 object_property_template = {
     "type": "rdf:type",
@@ -703,12 +704,12 @@ class Ui_MainWindow(object):
         self.objectPropertyTable.itemSelectionChanged.connect(self.rename)
         self.dataPropertyTable.itemSelectionChanged.connect(self.rename)
 
-
     def connect_all(self):
         self.tabWidget.currentChanged.connect(self.tab_changed)
         self.loadOntologyButton.clicked.connect(self.load_ontology_clicked)
         self.connect_save_last_name()
         self.rename_connection()
+        self.describeButton.clicked.connect(self.describe)
 
     def get_individual_info(self, individual: str):
         content = []
@@ -764,14 +765,15 @@ class Ui_MainWindow(object):
         data = []
         for i in individuals_name:
             data.extend(self.get_individual_info(i))
-
-
+        Dialog = QtWidgets.QDialog(parent=MainWindow)
+        ui = Ui_Dialog()
+        ui.setupUi(Dialog, data)
+        Dialog.show()
 
     def describe(self):
         selected_cells = self.individualTable.selectedItems()
         data: List[str] = [item.text() for item in selected_cells]  # type: ignore
         self.find_individual(data)
-
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
