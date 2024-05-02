@@ -15,6 +15,8 @@ from typing import Any, List, Dict, Set
 import parse
 from description import UiDescribeDialog
 from create_dialog import UiCreateDialog, CustomDialog, Connection
+from choose_dialog import UiChooseDialog, CustomChooseDialog
+
 
 object_property_template = {
     "type": "rdf:type",
@@ -46,6 +48,8 @@ data_property_template = {
     "decimal": "xsd:decimal",
     "int": "xsd:int",
     "string": "xsd:string",
+    "double": "xsd:double",
+    "dateTime": "xsd:dateTime"
 }
 
 
@@ -510,7 +514,7 @@ class Ui_MainWindow(object):
     def show_warning_box(self, message):
         warning_box = QtWidgets.QMessageBox(parent=MainWindow)
         warning_box.setIcon(QtWidgets.QMessageBox.Icon.Warning)
-        warning_box.setTitle("Warning!")
+        warning_box.setWindowTitle("Warning!")
         warning_box.setText(message)
         warning_box.show()
 
@@ -730,7 +734,7 @@ class Ui_MainWindow(object):
             self.refresh_tables()
 
     def create_data_property(self, data: Dict[str, str]):
-        allows_range = ["xsd:decimal", "xsd:int", "xsd:string"]
+        allows_range = ["xsd:decimal", "xsd:int", "xsd:string", "xsd:double", "xsd:dateTime"]
         if data['xs_range'] not in allows_range:
             self.show_warning_box("Check input args.")
             return
@@ -843,6 +847,8 @@ class Ui_MainWindow(object):
         self.describeButton.clicked.connect(self.describe)
         self.createButton.clicked.connect(self.create_form_window)
         self.deleteButton.clicked.connect(self.delete)
+        self.removeForIndividualButton.clicked.connect(self.remove_from_individual_clicked)
+        self.propertyButton.clicked.connect(self.provide_property_window)
 
     def get_individual_info(self, individual: str):
         content = []
@@ -894,6 +900,59 @@ class Ui_MainWindow(object):
 
         return self.handle_data_in_dict_output(content)
 
+    def provide_property_window(self):
+        Dialog = CustomChooseDialog(parent=MainWindow)
+        ui = UiChooseDialog()
+        ui.setupUi(Dialog)
+        Dialog.choiceDoneSignal.connect(self.provide_property_choice_done)
+        Dialog.show()
+
+    def provide_property_choice_done(self, connection: Connection):
+        Dialog = CustomDialog(parent=MainWindow)
+        ui = UiCreateDialog()
+        ui.setupUi(Dialog, connection)
+        Dialog.formDoneSignal.connect(lambda data: self.connect_property(connection, data))
+        Dialog.show()
+
+    def connect_property(self, connection: Connection, data: Dict[str, str]):
+        type_property = "ObjectProperty" if connection == Connection.PROVIDE_OBJECT_PROPERTY else "DatatypeProperty"
+        subject = data["subject"]
+        property = data["predicate"]
+        object_class = data["object"]
+        value_type = data.get("data_type", "")
+
+        allows_range = ["xsd:decimal", "xsd:int", "xsd:string", "xsd:double", "xsd:dateTime"]
+        if value_type not in allows_range and type_property == 'DatatypeProperty':
+            self.show_warning_box("Check input args.")
+            return
+        validation = parse.validate_input({
+            'NamedIndividual': subject,
+            type_property: property
+        })
+        try:
+            if not validation['NamedIndividual'] or not validation[type_property]:
+                self.show_warning_box("Check input args.")
+                return
+        except KeyError:
+            self.show_warning_box("Check input args.")
+            return
+        if type_property == 'ObjectProperty':
+            validation = parse.validate_input({
+                'NamedIndividual': object_class
+            })
+            if not validation['NamedIndividual']:
+                self.show_warning_box("Check input args.")
+                return
+            db_agent.execute_post_query(
+                f"<{subject}>", f"<{property}>", f"<{object_class}>"
+            )
+        elif type_property == 'DatatypeProperty':
+            db_agent.execute_post_query(
+                f"<{subject}>", f"<{property}>", f'"{object_class}"^^{value_type}'
+            )
+
+        self.refresh_tables()
+
     def find_individual(self, individuals_name: List[str]):
         data = []
         for i in individuals_name:
@@ -931,45 +990,35 @@ class Ui_MainWindow(object):
                     data.append(i.text())
             for i in data:
                 self.delete_data_property(i)
-    """
-    def delete_individual_property_form(self, tab: ttk.Frame):
-        self.delete_form_window = Tk()
-        self.delete_form_window.title("Delete Property Form")
-        entries = []
-        self.delete_form_window.geometry("500x300")
-        label = ttk.Label(self.delete_form_window, text="Property Name")
-        label.place(relx=0.5, rely=0.1, anchor=CENTER)
-        entry = ttk.Entry(self.delete_form_window)
-        entry.place(relx=0.5, rely=0.25, anchor=CENTER)
-        entries.append(entry)
 
-        label = ttk.Label(self.delete_form_window, text="Individual Name")
-        label.place(relx=0.5, rely=0.4, anchor=CENTER)
-        entry = ttk.Entry(self.delete_form_window)
-        entry.place(relx=0.5, rely=0.55, anchor=CENTER)
-        entries.append(entry)
+    def remove_from_individual_clicked(self):
+        connection = None
+        if self.tabWidget.currentIndex() == 3:
+            connection = Connection.REMOVE_OBJECT_PROPERTY_FROM_INDIVIDUAL
+        elif self.tabWidget.currentIndex() == 4:
+            connection = Connection.REMOVE_DATA_PROPERTY_FROM_INDIVIDUAL
+        Dialog = CustomDialog(parent=MainWindow)
+        ui = UiCreateDialog()
+        ui.setupUi(Dialog, connection)
+        Dialog.formDoneSignal.connect(lambda data: self.delete_individual_property(connection, data))
+        Dialog.show()
 
-        self.submit_button = ttk.Button(self.delete_form_window, text="Submit",
-                                        command=lambda: self.delete_individual_property(tab, entries))
-        self.submit_button.place(relx=0.5, rely=0.8, anchor=CENTER)
-
-    def delete_individual_property(self, tab: ttk.Frame, entries: List[ttk.Entry]):
-        if tab == self.data_property_tab:
-            self.instance_delete_data_property(entries[0].get(), entries[1].get())
+    def delete_individual_property(self, connection: Connection, data: Dict[str, str]):
+        if connection == Connection.REMOVE_OBJECT_PROPERTY_FROM_INDIVIDUAL:
+            self.instance_delete_object_property(data["property_name"], data["individual_name"])
         else:
-            self.instance_delete_object_property(entries[0].get(), entries[1].get())
-        self.delete_form_window.destroy()
+            self.instance_delete_data_property(data["property_name"], data["individual_name"])
 
     def instance_delete_data_property(self, data_property: str, individual_name: str, hide=False):
-        all_info = get_full_info(individual_name, "owl:NamedIndividual")
+        all_info = parse.get_full_info(individual_name, "owl:NamedIndividual")
         if not all_info:
-            messagebox.showwarning("Warning", "Such individual doesn't exist.")
+            self.show_warning_box("Such individual doesn't exist.")
             return
-        validation = validate_input({
+        validation = parse.validate_input({
             'DatatypeProperty': data_property,
         })
         if not validation['DatatypeProperty']:
-            messagebox.showwarning("Warning", "Check input args.")
+            self.show_warning_box("Check input args.")
             return
         for i in all_info:
             if i["relation"].split("/")[-1][:-1] == data_property:
@@ -979,18 +1028,18 @@ class Ui_MainWindow(object):
                     f'"{i["object"].split("^^")[0][1:-1]}"^^{data_property_template[i["object"].split("#")[-1][:-1]]}',
                 )
         if not hide:
-            self.refresh_tables(self.tabs)
+            self.refresh_tables()
 
     def instance_delete_object_property(self, object_property: str, individual_name: str, hide=False):
-        all_info = get_full_info(individual_name, "owl:NamedIndividual")
+        all_info = parse.get_full_info(individual_name, "owl:NamedIndividual")
         if not all_info:
-            messagebox.showwarning("Warning", "Such individual doesn't exist.")
+            self.show_warning_box("Such individual doesn't exist.")
             return
-        validation = validate_input({
+        validation = parse.validate_input({
             'ObjectProperty': object_property,
         })
         if not validation['ObjectProperty']:
-            messagebox.showwarning("Warning", "Check input args.")
+            self.show_warning_box("Check input args.")
             return
         for i in all_info:
             if i["relation"].split("/")[-1][:-1] == object_property:
@@ -1000,8 +1049,8 @@ class Ui_MainWindow(object):
                     f'<{i["object"].split("/")[-1][:-1]}>',
                 )
         if not hide:
-            self.refresh_tables(self.tabs)
-    """
+            self.refresh_tables()
+
     def delete_class(self, subject_class: str):
         all_info = parse.get_full_info(subject_class, "owl:Class")
         if not all_info:

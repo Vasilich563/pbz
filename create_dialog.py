@@ -20,6 +20,8 @@ class Connection(Enum):
     CREATE_DATA_PROPERTY = 5
     PROVIDE_OBJECT_PROPERTY = 6
     PROVIDE_DATA_PROPERTY = 7
+    REMOVE_OBJECT_PROPERTY_FROM_INDIVIDUAL = 8
+    REMOVE_DATA_PROPERTY_FROM_INDIVIDUAL = 9
 
 
 PARAM = {
@@ -92,7 +94,28 @@ PARAM = {
         "edit3_text": "Data type from range",
         "edit4_enabled": True,
         "edit4_text": "Value"
+    },
+    Connection.REMOVE_OBJECT_PROPERTY_FROM_INDIVIDUAL: {
+        "title": "Remove object property from individual",
+        "edit1_text": "Name of individual",
+        "edit2_enabled": True,
+        "edit2_text": "Name of object property to remove",
+        "edit3_enabled": False,
+        "edit3_text": "",
+        "edit4_enabled": False,
+        "edit4_text": ""
+    },
+    Connection.REMOVE_DATA_PROPERTY_FROM_INDIVIDUAL: {
+        "title": "Remove data property from individual",
+        "edit1_text": "Name of individual",
+        "edit2_enabled": True,
+        "edit2_text": "Name of data property to remove",
+        "edit3_enabled": False,
+        "edit3_text": "",
+        "edit4_enabled": False,
+        "edit4_text": ""
     }
+
 }
 
 
@@ -101,6 +124,7 @@ class CustomDialog(QtWidgets.QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+
 
 class UiCreateDialog(object):
     def setupUi(self, Dialog: CustomDialog, connection: Connection):
@@ -218,7 +242,7 @@ class UiCreateDialog(object):
     def make_form_dict(self, Dialog):
         if self.connection == Connection.CREATE_CLASS:
             form_dict = {
-                'classname': self.lineEdit1.text
+                'classname': self.lineEdit1.text()
             }
         elif self.connection == Connection.CREATE_SUBCLASS:
             form_dict = {
@@ -242,7 +266,30 @@ class UiCreateDialog(object):
                 'domain': self.lineEdit2.text(),
                 'xs_range': self.lineEdit3.text()
             }
-        # TODO Provide property
+        elif self.connection == Connection.PROVIDE_OBJECT_PROPERTY:
+            form_dict = {
+                'subject': self.lineEdit1.text(),
+                'predicate': self.lineEdit2.text(),
+                'object': self.lineEdit3.text()
+            }
+        elif self.connection == Connection.PROVIDE_DATA_PROPERTY:
+            form_dict = {
+                'subject': self.lineEdit1.text(),
+                'predicate': self.lineEdit2.text(),
+                'object': self.lineEdit4.text(),
+                "data_type": self.lineEdit3.text()
+            }
+        elif self.connection == Connection.REMOVE_OBJECT_PROPERTY_FROM_INDIVIDUAL:
+            form_dict = {
+                'individual_name': self.lineEdit1.text(),
+                'property_name': self.lineEdit2.text()
+            }
+        elif self.connection == Connection.REMOVE_DATA_PROPERTY_FROM_INDIVIDUAL:
+            form_dict = {
+                'individual_name': self.lineEdit1.text(),
+                'property_name': self.lineEdit2.text()
+            }
+
         Dialog.formDoneSignal.emit(form_dict)
         Dialog.accept()
 
