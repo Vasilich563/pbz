@@ -5,7 +5,7 @@ WHERE {
   ?army rdf:type ?duty_in
 }
 
-SELECT ?individual
+SELECT ?individual ?subclass
 WHERE {
   ?subclass rdfs:subClassOf* <http://127.0.0.1:10035/repositories/PBZ/Вооружение> .
   ?individual rdf:type ?subclass .
@@ -18,3 +18,12 @@ WHERE {
 Зенитные_установки
 Бронетехника
 Артиллерийские_орудия
+
+SELECT ?individual ?caliber ?subclass ?subclass
+WHERE {
+  ?subclass rdfs:subClassOf* <Вооружение> .
+  ?individual rdf:type ?subclass ;
+    <http://127.0.0.1:10035/repositories/PBZ/Калибр> ?caliber.
+  FILTER (xsd:double(?caliber) > 20.0)
+}
+

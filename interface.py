@@ -862,6 +862,7 @@ class Ui_MainWindow(object):
         self.removeForIndividualButton.clicked.connect(self.remove_from_individual_clicked)
         self.propertyButton.clicked.connect(self.provide_property_window)
         self.executeButton.clicked.connect(self.execute_query)
+        self.deleteEverythingButton.clicked.connect(self.delete_all)
 
     def get_individual_info(self, individual: str):
         content = []
@@ -1120,7 +1121,7 @@ class Ui_MainWindow(object):
         variables = pattern.findall(query)
 
         return list(dict.fromkeys(variables))
-
+    
     def execute_query(self):
         query_text = self.queryEdit.toPlainText()
         variables = self.parse_query(query=query_text)
@@ -1131,8 +1132,8 @@ class Ui_MainWindow(object):
         elif isinstance(data, str):
             self.show_warning_box(data)
             return
-        data_list = []
         print(data)
+        data_list = []
         for i in data:
             values = list(i.values())
             data_list.append([])
