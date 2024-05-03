@@ -99,6 +99,25 @@ def rewrite_table(table: QtWidgets.QTableWidget, list_of_value_rows):
             table.setItem(i, j, item)
 
 
+def rewrite_table_with_headers(table: QtWidgets.QTableWidget, headers_list, list_of_value_rows):
+    table.setColumnCount(len(headers_list))
+    for i in range(len(headers_list)):
+        item = QtWidgets.QTableWidgetItem()
+        item.setText(headers_list[i])
+        table.setHorizontalHeaderItem(i, item)
+    rows_amount = len(list_of_value_rows)
+    table.setRowCount(rows_amount)
+    for i in range(len(list_of_value_rows)):
+        item = QtWidgets.QTableWidgetItem()
+        item.setText(str(i + 1))
+        table.setVerticalHeaderItem(i, item)
+        for j in range(len(headers_list)):
+            item = QtWidgets.QTableWidgetItem()
+            item.setTextAlignment(QtCore.Qt.AlignLeft)
+            item.setText(str(list_of_value_rows[i][j]))
+            table.setItem(i, j, item)
+
+
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
@@ -335,13 +354,6 @@ class Ui_MainWindow(object):
         self.queryTable.setTextElideMode(QtCore.Qt.ElideMiddle)
         self.queryTable.setCornerButtonEnabled(True)
         self.queryTable.setObjectName("queryTable")
-        self.queryTable.setColumnCount(3)
-        item = QtWidgets.QTableWidgetItem()
-        self.queryTable.setHorizontalHeaderItem(0, item)
-        item = QtWidgets.QTableWidgetItem()
-        self.queryTable.setHorizontalHeaderItem(1, item)
-        item = QtWidgets.QTableWidgetItem()
-        self.queryTable.setHorizontalHeaderItem(2, item)
         self.queryTable.horizontalHeader().setCascadingSectionResizes(False)
         self.queryTable.verticalHeader().setCascadingSectionResizes(False)
         self.queryTable.verticalHeader().setStretchLastSection(False)
@@ -849,6 +861,7 @@ class Ui_MainWindow(object):
         self.deleteButton.clicked.connect(self.delete)
         self.removeForIndividualButton.clicked.connect(self.remove_from_individual_clicked)
         self.propertyButton.clicked.connect(self.provide_property_window)
+        self.executeButton.clicked.connect(self.execute_query)
 
     def get_individual_info(self, individual: str):
         content = []
@@ -1102,6 +1115,40 @@ class Ui_MainWindow(object):
         db_agent.delete_all()
         self.refresh_tables()
 
+    def parse_query(self, query: str) -> List[str]:  # TODO
+        pattern = re.compile(r'\?(\w+)\b')
+        variables = pattern.findall(query)
+
+        return list(dict.fromkeys(variables))
+
+        def execute_query(self):
+        query_text = self.queryEdit.toPlainText()
+        variables = self.parse_query(query=query_text)
+        data = db_agent.execute_raw_query(query_text)
+        if isinstance(data, bool):
+            self.refresh_tables()
+            return
+        elif isinstance(data, str):
+            self.show_warning_box(data)
+            return
+        data_list = []
+        print(data)
+        for i in data:
+            values = list(i.values())
+            data_list.append([])
+            for j in values:
+                try:
+                    item = j.uri.split("#")[1]
+                except AttributeError:
+                    item = j.label
+                except Exception:
+                    item = j.uri.split("/")[-1]
+                if not item:
+                    item = j.uri.split("/")[-2]
+                data_list[-1].append(item)
+
+        rewrite_table_with_headers(self.queryTable, variables, data_list)
+
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "Azer"))
@@ -1158,12 +1205,6 @@ class Ui_MainWindow(object):
         self.queryEdit.setPlaceholderText(_translate("MainWindow", "Input your SPARQL query..."))
         self.executeButton.setText(_translate("MainWindow", "Execute"))
 
-        item = self.queryTable.horizontalHeaderItem(0)
-        item.setText(_translate("MainWindow", "Object property"))
-        item = self.queryTable.horizontalHeaderItem(1)
-        item.setText(_translate("MainWindow", "Domain"))
-        item = self.queryTable.horizontalHeaderItem(2)
-        item.setText(_translate("MainWindow", "Range"))
         __sortingEnabled = self.queryTable.isSortingEnabled()
         self.queryTable.setSortingEnabled(False)
         self.queryTable.setSortingEnabled(__sortingEnabled)

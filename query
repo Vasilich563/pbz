@@ -1,0 +1,20 @@
+SELECT ?human ?duty_in ?army
+WHERE {
+  ?human rdf:type owl:NamedIndividual ;
+            <http://127.0.0.1:10035/repositories/PBZ/Служить_в> ?army .
+  ?army rdf:type ?duty_in
+}
+
+SELECT ?individual
+WHERE {
+  ?subclass rdfs:subClassOf* <http://127.0.0.1:10035/repositories/PBZ/Вооружение> .
+  ?individual rdf:type ?subclass .
+}
+
+Вооружение
+Стрелковое_оружие
+Стратегическое_вооружение
+Ручные_гранаты
+Зенитные_установки
+Бронетехника
+Артиллерийские_орудия

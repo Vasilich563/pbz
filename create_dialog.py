@@ -246,8 +246,8 @@ class UiCreateDialog(object):
             }
         elif self.connection == Connection.CREATE_SUBCLASS:
             form_dict = {
-                'classname': self.lineEdit1.text(),
-                'parent': self.lineEdit2.text()
+                'classname': self.lineEdit2.text(),
+                'parent': self.lineEdit1.text()
             }
         elif self.connection == Connection.CREATE_INDIVIDUAL:
             form_dict = {
