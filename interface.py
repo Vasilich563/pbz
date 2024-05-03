@@ -1121,7 +1121,7 @@ class Ui_MainWindow(object):
 
         return list(dict.fromkeys(variables))
 
-        def execute_query(self):
+    def execute_query(self):
         query_text = self.queryEdit.toPlainText()
         variables = self.parse_query(query=query_text)
         data = db_agent.execute_raw_query(query_text)
